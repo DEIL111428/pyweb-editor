@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyWeb Editor</title>
+    <!-- Подключаем Tailwind (для простоты через CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Подключаем стили -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="h-screen flex flex-col overflow-hidden bg-[#0f0f0f] text-[#e5e5e5]">
+
+    <!-- Хедер -->
+    <header class="bg-[#141414] border-b border-[#222] h-14 flex justify-between items-center px-4 z-20 shrink-0">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-camera-retro text-blue-500 text-xl"></i>
+            <span class="font-bold tracking-tight">PyWeb <span class="text-blue-500">Editor</span></span>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="openModal()" class="btn-header">
+                <i class="fas fa-info-circle"></i> Об авторах
+            </button>
+             <label class="btn-header cursor-pointer">
+                <i class="fas fa-folder-open"></i> Открыть
+                <input type="file" id="fileInput" accept="image/*" class="hidden">
+            </label>
+            <button onclick="downloadImage()" id="downloadBtn" disabled class="btn-primary">
+                <i class="fas fa-download"></i> Экспорт
+            </button>
+        </div>
+    </header>
+
+    <!-- Модальное окно -->
+    <div id="authorModal" class="modal" onclick="closeModal(event)">
+        <div class="modal-content">
+            <div class="mb-4">
+                <i class="fas fa-users text-4xl text-blue-500 mb-2"></i>
+                <h2 class="text-xl font-bold text-white">Разработчики</h2>
+            </div>
+            <div class="text-gray-300 mb-6 space-y-2">
+                <p class="author-tag">Иванов Ф.В.</p>
+                <p class="author-tag">Стажков Д.А.</p>
+            </div>
+            <button onclick="document.getElementById('authorModal').style.display='none'" class="btn-primary w-full">
+                Закрыть
+            </button>
+        </div>
+    </div>
+
+    <div class="flex flex-1 h-full overflow-hidden">
+        
+        <!-- Сайдбар -->
+        <aside class="w-80 bg-[#141414] border-r border-[#222] flex flex-col z-10 overflow-y-auto custom-scrollbar">
+            
+            <div class="flex p-2 border-b border-[#222] gap-2 sticky top-0 bg-[#141414] z-10">
+                <button onclick="historyUndo()" id="btnUndo" disabled class="btn-history"><i class="fas fa-undo mr-1"></i> Отмена</button>
+                <button onclick="historyRedo()" id="btnRedo" disabled class="btn-history"><i class="fas fa-redo mr-1"></i> Повтор</button>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title"><i class="fas fa-crop-alt"></i> Геометрия</div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="rotate(-90)" class="btn-tool"><i class="fas fa-undo fa-flip-horizontal"></i> -90°</button>
+                    <button onclick="rotate(90)" class="btn-tool"><i class="fas fa-redo"></i> +90°</button>
+                    <button onclick="flip('x')" class="btn-tool"><i class="fas fa-arrows-alt-h"></i> Отразить X</button>
+                    <button onclick="flip('y')" class="btn-tool"><i class="fas fa-arrows-alt-v"></i> Отразить Y</button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title"><i class="fas fa-sliders-h"></i> Коррекция</div>
+                <div class="space-y-4">
+                    {% for id, label, default, min, max in [
+                        ('brightness', 'Яркость', 1.0, 0, 2),
+                        ('contrast', 'Контраст', 1.0, 0, 2),
+                        ('saturation', 'Насыщенность', 1.0, 0, 3),
+                        ('sharpness', 'Резкость', 1.0, 0, 5)
+                    ] %}
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-xs text-gray-400">{{ label }}</label>
+                            <span id="val-{{ id }}" class="text-xs text-blue-400 font-mono">{{ default }}</span>
+                        </div>
+                        <input type="range" min="{{ min }}" max="{{ max }}" step="0.05" value="{{ default }}" id="{{ id }}" class="range-slider" oninput="liveUpdate('{{ id }}')" onchange="commitState()">
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title"><i class="fas fa-palette"></i> RGB Баланс</div>
+                <div class="space-y-4">
+                     {% for id, label, default, color_class in [
+                        ('color_r', 'Красный (R)', 1.0, 'text-red-400'),
+                        ('color_g', 'Зеленый (G)', 1.0, 'text-green-400'),
+                        ('color_b', 'Синий (B)', 1.0, 'text-blue-400')
+                    ] %}
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-xs text-gray-400">{{ label }}</label>
+                            <span id="val-{{ id }}" class="text-xs {{ color_class }} font-mono">{{ default }}</span>
+                        </div>
+                        <input type="range" min="0" max="2" step="0.02" value="{{ default }}" id="{{ id }}" class="range-slider" oninput="liveUpdate('{{ id }}')" onchange="commitState()">
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title"><i class="fas fa-wand-magic-sparkles"></i> Эффекты</div>
+                <div class="mb-4">
+                    <div class="flex justify-between mb-1">
+                        <label class="text-xs text-gray-400"><i class="fas fa-circle-notch text-gray-600 mr-1"></i> Виньетка</label>
+                        <span id="val-vignette" class="text-xs text-purple-400 font-mono">0</span>
+                    </div>
+                    <input type="range" min="0" max="1" step="0.05" value="0" id="vignette" class="range-slider" oninput="liveUpdate('vignette')" onchange="commitState()">
+                </div>
+                <div class="mb-4">
+                    <div class="flex justify-between mb-1">
+                        <label class="text-xs text-gray-400"><i class="fas fa-tint text-gray-600 mr-1"></i> Размытие</label>
+                        <span id="val-blur" class="text-xs text-purple-400 font-mono">0</span>
+                    </div>
+                    <input type="range" min="0" max="10" step="0.5" value="0" id="blur" class="range-slider" oninput="liveUpdate('blur')" onchange="commitState()">
+                </div>
+                <div class="grid grid-cols-2 gap-3 mt-4">
+                    {% for id, label, color in [('grayscale', 'Ч/Б', 'blue'), ('sepia', 'Сепия', 'amber'), ('negative', 'Негатив', 'pink')] %}
+                    <label class="flex items-center gap-2 cursor-pointer p-2 rounded bg-[#1f1f1f] hover:bg-[#2a2a2a] transition">
+                        <input type="checkbox" id="{{ id }}" onchange="commitState(true)" class="accent-{{ color }}-500 w-4 h-4">
+                        <span class="text-xs text-gray-300">{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="p-6 mt-auto">
+                 <button onclick="resetAll()" class="w-full py-2 bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 rounded text-xs transition">
+                    Сброс настроек
+                </button>
+            </div>
+        </aside>
+
+        <!-- Область просмотра -->
+        <main class="flex-1 bg-[#050505] canvas-bg relative flex items-center justify-center p-4 overflow-hidden">
+            <div id="placeholder" class="text-center opacity-40">
+                <i class="fas fa-image text-6xl mb-4 text-gray-600"></i>
+                <p class="text-gray-500 text-sm">Загрузите изображение</p>
+            </div>
+            
+            <div class="relative shadow-2xl transition-all duration-200" style="max-height: 95%; max-width: 95%;">
+                <span id="loader" class="loader absolute top-1/2 left-1/2 -ml-6 -mt-6 z-50"></span>
+                <img id="previewImage" class="max-h-full max-w-full object-contain hidden rounded shadow-black" src="" alt="Preview">
+            </div>
+        </main>
+    </div>
+
+    <!-- Подключаем скрипт -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
